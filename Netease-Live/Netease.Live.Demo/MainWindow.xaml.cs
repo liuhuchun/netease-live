@@ -429,7 +429,7 @@ namespace Netease.Live.Demo
                 var param = new VideoWaterParam();
 
                 param.FilePath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Water.png");
-                param.StartX = 10;
+                param.StartX = (uint)SystemParameters.PrimaryScreenWidth / 4 * 4 - 100;
                 param.StartY = 10;
 
                 ApiProvider.Default.SetVideoWaterMark(param);
@@ -553,15 +553,15 @@ namespace Netease.Live.Demo
 
                         MessageBox.Show(text, "Open Success");
 
+                        // 测试只能设置为Left=0,Top=0 ???
                         var rect = new RectScreenParam
                         {
-                            Left = ((int)SystemParameters.PrimaryScreenWidth / 4) * 4 - 210,
-                            Top = ((int)SystemParameters.PrimaryScreenHeight / 4) * 4 - 110,
-                            Right = 10,
-                            Bottom = 10
+                            Left = 0,
+                            Top = 0,
+                            Right = 200,
+                            Bottom = 150
                         };
 
-                        // TODO 此方法无效
                         _camera.SetDisplayRect(rect);
                         _camera.AdjustLayer(false);
 
