@@ -16,6 +16,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Drawing = System.Drawing;
 
 namespace Netease.Live.Demo
 {
@@ -30,9 +31,6 @@ namespace Netease.Live.Demo
         private bool _videoPreviewStarted;
         private bool _liveStreamStarted;
         private bool _recordStarted;
-
-        private MergedVideoSamplerCallback _mergedVideoSamplerCallback;
-        private StatusNotifyCallback _statusNotifyCallback;
 
         private ChildVideoApiProvider _desktop;
         private bool _desktopOpened;
@@ -50,11 +48,17 @@ namespace Netease.Live.Demo
         {
             InitializeComponent();
 
-            _mergedVideoSamplerCallback = new MergedVideoSamplerCallback(OnVideoSamplerMerged);
-            _statusNotifyCallback = new StatusNotifyCallback(OnStatusChanged);
+            ApiProvider.Default.LiveStreamStatusChanged -= Default_LiveStreamStatusChanged;
+            ApiProvider.Default.LiveStreamStatusChanged += Default_LiveStreamStatusChanged;
+            ApiProvider.Default.VideoPreviewing -= Default_VideoPreviewing;
+            ApiProvider.Default.VideoPreviewing += Default_VideoPreviewing;
 
             _desktop = new ChildVideoApiProvider();
+            _desktop.VideoPreviewing += _desktop_VideoPreviewing;
+
             _camera = new ChildVideoApiProvider();
+            _camera.VideoPreviewing += _camera_VideoPreviewing;
+
             _system = new ChildAudioApiProvider();
         }
 
@@ -76,11 +80,11 @@ namespace Netease.Live.Demo
         [DllImport("gdi32.dll")]
         private static extern bool DeleteObject(IntPtr hObject);
 
-        private BitmapSource ToBitmapSource(System.Drawing.Image image)
+        private BitmapSource ToBitmapSource(Drawing.Image image)
         {
             BitmapSource toReturn = null;
 
-            using (var bmp = new System.Drawing.Bitmap(image))
+            using (var bmp = new Drawing.Bitmap(image))
             {
                 var hBitmap = bmp.GetHbitmap();
 
@@ -97,35 +101,45 @@ namespace Netease.Live.Demo
             return toReturn;
         }
 
-        private void OnVideoSamplerMerged(IntPtr service, VideoSampler sampler)
+        private void _camera_VideoPreviewing(object sender, VideoPreviewingEventArgs e)
         {
-            if (sampler == null ||
-                sampler.DataSize == 0 ||
-                sampler.Data == IntPtr.Zero)
-            {
-                return;
-            }
-
-            var bytes = new byte[sampler.DataSize];
-
-            Marshal.Copy(sampler.Data, bytes, 0, bytes.Length);
-
             DoAction(() =>
             {
-                using (var ms = new System.IO.MemoryStream(bytes))
+                using (var img = e.Image)
                 {
-                    var img = System.Drawing.Image.FromStream(ms, true, true);
-
-                    imgPreview.Source = ToBitmapSource(img);
+                    imgPreviewCamera.Source = ToBitmapSource(img);
                 }
             });
         }
 
-        private void OnStatusChanged(IntPtr service, Status status, ErrorCode errorCode)
+        private void _desktop_VideoPreviewing(object sender, VideoPreviewingEventArgs e)
+        {
+
+            DoAction(() =>
+            {
+                using (var img = e.Image)
+                {
+                    imgPreviewDesktop.Source = ToBitmapSource(img);
+                }
+            });
+        }
+
+        private void Default_VideoPreviewing(object sender, VideoPreviewingEventArgs e)
         {
             DoAction(() =>
             {
-                tbxStatus.AppendText($"{DateTime.Now.ToLongTimeString()}-status:{status} errorCode:{errorCode}{Environment.NewLine}");
+                using (var img = e.Image)
+                {
+                    imgPreviewMerged.Source = ToBitmapSource(img);
+                }
+            });
+        }
+
+        private void Default_LiveStreamStatusChanged(object sender, LiveStreamStatusChangedEventArgs e)
+        {
+            DoAction(() =>
+            {
+                tbxStatus.AppendText($"{DateTime.Now.ToLongTimeString()}-status:{e.Status} errorCode:{e.Code}{Environment.NewLine}");
             });
         }
 
@@ -303,12 +317,7 @@ namespace Netease.Live.Demo
                         // 需要初始化，否则调用UpdateUrl报错
                         param.Url = new string('\0', 1024);
 
-                        if (_paramInited = ApiProvider.Default.InitParam(param))
-                        {
-                            ApiProvider.Default.SetVideoSamplerCallback(_mergedVideoSamplerCallback);
-
-                            ApiProvider.Default.SetStatusCallback(_statusNotifyCallback);
-                        }
+                        _paramInited = ApiProvider.Default.InitParam(param);
                     }
                 }
             });
@@ -389,7 +398,7 @@ namespace Netease.Live.Demo
             {
                 if (_paramInited)
                 {
-                    var url = "rtmp://xxx.live.126.net/live/...";
+                    var url = "这里是网易rtmp推流地址";
 
                     if (ApiProvider.Default.UpdatePushUrl(url))
                     {
@@ -471,6 +480,8 @@ namespace Netease.Live.Demo
                 if (_desktopOpened &&
                     (_desktopStarted = _desktop.StartCapture()))
                 {
+                    _desktop.SwitchSoloPreview(true);
+
                     MessageBox.Show("Started!", "Start Success");
                 }
             });
@@ -482,6 +493,10 @@ namespace Netease.Live.Demo
             {
                 if (_desktopStarted)
                 {
+                    _desktop.SwitchSoloPreview(false);
+
+                    imgPreviewDesktop.Source = null;
+
                     _desktop.StopCapture();
 
                     _desktopStarted = false;
@@ -550,7 +565,10 @@ namespace Netease.Live.Demo
                         _camera.SetDisplayRect(rect);
                         _camera.AdjustLayer(false);
 
-                        _cameraStarted = _camera.StartCapture();
+                        if (_cameraStarted = _camera.StartCapture())
+                        {
+                            _camera.SwitchSoloPreview(true);
+                        }
                     }
                 }
             });
@@ -562,6 +580,10 @@ namespace Netease.Live.Demo
             {
                 if (_cameraStarted)
                 {
+                    _camera.SwitchSoloPreview(false);
+
+                    imgPreviewCamera.Source = null;
+
                     _camera.StopCapture();
 
                     _cameraStarted = false;
@@ -580,13 +602,13 @@ namespace Netease.Live.Demo
         {
             DoAction(() =>
             {
-                var param = new AudioInParam();
+                var param = _system.GetDefaultParam();
 
                 param.Type = AudioInType.System;
-                param.SampleRate = 44100;
-                param.NumOfChannels = 1;
-                param.FrameSize = 2048;
-                param.Format = AudioInFormat.S16;
+                //param.SampleRate = 44100;
+                //param.NumOfChannels = 1;
+                //param.FrameSize = 2048;
+                //param.Format = AudioInFormat.S16;
 
                 if (_systemOpened = _system.Open(param))
                 {
@@ -705,6 +727,8 @@ namespace Netease.Live.Demo
                 if (_videoPreviewStarted)
                 {
                     ApiProvider.Default.StopVideoPreview();
+
+                    imgPreviewMerged.Source = null;
 
                     _videoPreviewStarted = false;
                 }

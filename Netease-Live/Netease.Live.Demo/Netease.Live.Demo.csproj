@@ -104,7 +104,7 @@
   <PropertyGroup>
     <PreBuildEvent>IF EXIST "$(TargetDir)" (
 Xcopy "$(SolutionDir)dlls\*.*" "$(TargetDir)" /R /Y /C /D /I
-Xcopy "$(SolutionDir)dlls\libs\*.*" "$(TargetDir)\libs" /R /Y /C /D /I
+Xcopy "$(SolutionDir)libs\*.*" "$(TargetDir)\libs" /R /Y /C /D /I
 Xcopy "$(SolutionDir)imgs\*.*" "$(TargetDir)" /R /Y /C /D /I
 )</PreBuildEvent>
   </PropertyGroup>

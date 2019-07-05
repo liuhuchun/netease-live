@@ -2,6 +2,7 @@
 using Netease.Live.InteropServices.Models;
 using System;
 using System.Collections.Generic;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -12,11 +13,14 @@ namespace Netease.Live.InteropServices
 {
     public sealed class ApiProvider : IDisposable
     {
-        private bool _disposed;
-
         private static ApiProvider _default;
 
         private static readonly object Token = new object();
+
+        private bool _disposed;
+
+        private MergedVideoSamplerCallback _mergedVideoSamplerCallback;
+        private StatusNotifyCallback _statusNotifyCallback;
 
         public static ApiProvider Default
         {
@@ -68,11 +72,60 @@ namespace Netease.Live.InteropServices
         /// </summary>
         internal IntPtr Service { get; private set; }
 
-        private ApiProvider() { }
+        /// <summary>
+        /// 视频预览时发生
+        /// </summary>
+        public event EventHandler<VideoPreviewingEventArgs> VideoPreviewing;
+
+        /// <summary>
+        /// 直播推流状态发生更改时发生
+        /// </summary>
+        public event EventHandler<LiveStreamStatusChangedEventArgs> LiveStreamStatusChanged;
+
+        private ApiProvider()
+        {
+            _mergedVideoSamplerCallback = new MergedVideoSamplerCallback(OnVideoSamplerMerged);
+            _statusNotifyCallback = new StatusNotifyCallback(OnStatusChanged);
+        }
 
         ~ApiProvider()
         {
             Dispose(false);
+        }
+
+        private void OnStatusChanged(IntPtr service, Status status, ErrorCode errorCode)
+        {
+            if (service != Service)
+            {
+                return;
+            }
+
+            LiveStreamStatusChanged?.Invoke(this, new LiveStreamStatusChangedEventArgs(status, errorCode));
+        }
+
+        private void OnVideoSamplerMerged(IntPtr service, VideoSampler sampler)
+        {
+            if (service != Service ||
+                sampler == null ||
+                sampler.DataSize == 0 ||
+                sampler.Data == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var data = new byte[sampler.DataSize];
+
+            Marshal.Copy(sampler.Data, data, 0, data.Length);
+
+            // TODO : 图像格式与像素大小值对应
+            var image = Utilities.CreateBitmap(
+                data,
+                sampler.Width,
+                sampler.Height,
+                PixelFormat.Format32bppArgb,
+                sampler.Width * sampler.Height * 4);
+
+            VideoPreviewing?.Invoke(this, new VideoPreviewingEventArgs(image));
         }
 
         /// <summary>
@@ -317,6 +370,8 @@ namespace Netease.Live.InteropServices
             {
                 Service = service;
 
+                SetStatusCallback(_statusNotifyCallback);
+
                 return true;
             }
 
@@ -337,6 +392,8 @@ namespace Netease.Live.InteropServices
         public void Destroy()
         {
             ThrowIfServiceException();
+
+            SetStatusCallback(null);
 
             Api.Destroy(Service);
 
@@ -439,14 +496,9 @@ namespace Netease.Live.InteropServices
         /// 设置视频截图的的回调
         /// </summary>
         /// <param name="callback">视频截图图像回调</param>
-        public void SetVideoSamplerCallback(MergedVideoSamplerCallback callback)
+        private void SetVideoSamplerCallback(MergedVideoSamplerCallback callback)
         {
             ThrowIfServiceException();
-
-            if (callback == null)
-            {
-                throw new ArgumentNullException("callback");
-            }
 
             Api.SetVideoSamplerCallback(Service, callback);
         }
@@ -455,14 +507,9 @@ namespace Netease.Live.InteropServices
         /// 设置直播过程中状态回调
         /// </summary>
         /// <param name="callback">直播状态通知回调</param>
-        public void SetStatusCallback(StatusNotifyCallback callback)
+        private void SetStatusCallback(StatusNotifyCallback callback)
         {
             ThrowIfServiceException();
-
-            if (callback == null)
-            {
-                throw new ArgumentNullException("callback");
-            }
 
             Api.SetStatusCallback(Service, callback);
         }
@@ -549,6 +596,8 @@ namespace Netease.Live.InteropServices
         {
             ThrowIfServiceException();
 
+            SetVideoSamplerCallback(_mergedVideoSamplerCallback);
+
             return Api.StartVideoPreview(Service) == FuncResult.Ok;
         }
 
@@ -580,6 +629,8 @@ namespace Netease.Live.InteropServices
             ThrowIfServiceException();
 
             Api.StopVideoPreview(Service);
+
+            SetVideoSamplerCallback(null);
         }
 
         /// <summary>
@@ -755,6 +806,10 @@ namespace Netease.Live.InteropServices
 
             if (disposing)
             {
+                VideoPreviewing = null;
+
+                LiveStreamStatusChanged = null;
+
                 _default = null;
             }
 

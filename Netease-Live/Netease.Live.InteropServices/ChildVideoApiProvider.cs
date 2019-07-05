@@ -1,12 +1,16 @@
 ﻿using Netease.Live.InteropServices.Enums;
 using Netease.Live.InteropServices.Models;
 using System;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
 namespace Netease.Live.InteropServices
 {
     public sealed class ChildVideoApiProvider : IDisposable
     {
         private bool _disposed;
+
+        private ChildVideoSamplerCallback _videoSamplerCallback;
 
         /// <summary>
         /// 音频实例
@@ -26,9 +30,45 @@ namespace Netease.Live.InteropServices
             }
         }
 
+        /// <summary>
+        /// 视频预览时发生
+        /// </summary>
+        public event EventHandler<VideoPreviewingEventArgs> VideoPreviewing;
+
+        public ChildVideoApiProvider()
+        {
+            _videoSamplerCallback = new ChildVideoSamplerCallback(OnVideoSamplerChanged);
+        }
+
         ~ChildVideoApiProvider()
         {
             Dispose(false);
+        }
+
+        private void OnVideoSamplerChanged(IntPtr service, IntPtr childService, VideoSampler sampler)
+        {
+            if (service != ApiProvider.Default.Service ||
+                childService != ChildService ||
+                sampler == null ||
+                sampler.DataSize == 0 ||
+                sampler.Data == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var data = new byte[sampler.DataSize];
+
+            Marshal.Copy(sampler.Data, data, 0, data.Length);
+
+            // TODO : 图像格式与像素大小值对应
+            var image = Utilities.CreateBitmap(
+                data,
+                sampler.Width,
+                sampler.Height,
+                PixelFormat.Format32bppArgb,
+                sampler.Width * sampler.Height * 4);
+
+            VideoPreviewing?.Invoke(this, new VideoPreviewingEventArgs(image));
         }
 
         internal void ThrowIfChildServiceException()
@@ -67,11 +107,6 @@ namespace Netease.Live.InteropServices
                 throw new ArgumentNullException("param");
             }
 
-            if (ChildService != IntPtr.Zero)
-            {
-                Close();
-            }
-
             var p = (_VideoInParam)param;
 
             try
@@ -94,6 +129,8 @@ namespace Netease.Live.InteropServices
             ThrowIfChildServiceException();
 
             ChildVideoApi.Close(ChildService);
+
+            ChildService = IntPtr.Zero;
         }
 
         /// <summary>
@@ -164,14 +201,9 @@ namespace Netease.Live.InteropServices
         /// 设置单独预览的视频流buffer回调函数，可用于预览进行显示
         /// </summary>
         /// <param name="callback">单独推流的buffer回调</param>
-        public void SetSoloPreviewCallback(ChildVideoSamplerCallback callback)
+        private void SetSoloPreviewCallback(ChildVideoSamplerCallback callback)
         {
             ThrowIfChildServiceException();
-
-            if (callback == null)
-            {
-                throw new ArgumentNullException();
-            }
 
             ChildVideoApi.SetSoloPreviewCallback(ChildService, callback);
         }
@@ -185,6 +217,15 @@ namespace Netease.Live.InteropServices
             ThrowIfChildServiceException();
 
             ChildVideoApi.SwitchSoloPreview(ChildService, on);
+
+            if (on)
+            {
+                SetSoloPreviewCallback(_videoSamplerCallback);
+            }
+            else
+            {
+                SetSoloPreviewCallback(null);
+            }
         }
 
         /// <summary>
@@ -233,7 +274,7 @@ namespace Netease.Live.InteropServices
 
             if (disposing)
             {
-                // 
+                VideoPreviewing = null;
             }
 
             if (ChildService != IntPtr.Zero)

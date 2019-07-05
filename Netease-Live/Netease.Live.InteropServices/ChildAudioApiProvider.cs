@@ -48,11 +48,6 @@ namespace Netease.Live.InteropServices
                 throw new ArgumentNullException("param");
             }
 
-            if (ChildService != IntPtr.Zero)
-            {
-                Close();
-            }
-
             var p = (_AudioInParam)param;
 
             try
@@ -83,6 +78,8 @@ namespace Netease.Live.InteropServices
             ThrowIfChildServiceException();
 
             ChildAudioApi.Close(ChildService);
+
+            ChildService = IntPtr.Zero;
         }
 
         /// <summary>

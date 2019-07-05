@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="直播测试" Height="450" Width="800">
+        Title="直播测试" Height="600" Width="720">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -62,9 +62,35 @@
                 <ColumnDefinition />
             </Grid.ColumnDefinitions>
 
-            <Image x:Name="imgPreview" Grid.Column="0" />
+            <Grid Grid.Column="0" Background="Green">
+                <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
 
-            <TextBox x:Name="tbxStatus" Grid.Column="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" />
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="视频预览区" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Yellow" />
+                <Border Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" BorderThickness="1" BorderBrush="Yellow">
+                    <Image x:Name="imgPreviewMerged" />
+                </Border>
+
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="桌面预览区" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Yellow" />
+                <Border Grid.Row="1" Grid.Column="0" BorderThickness="1" BorderBrush="Yellow" Margin="0,-1,0,0">
+                    <Image x:Name="imgPreviewDesktop" />
+                </Border>
+
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="摄像头预览区" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Yellow" />
+                <Border Grid.Row="1" Grid.Column="1" BorderThickness="1" BorderBrush="Yellow" Margin="0,-1,0,0">
+                    <Image x:Name="imgPreviewCamera" />
+                </Border>
+            </Grid>
+
+            <TextBox x:Name="tbxStatus" Grid.Column="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" Background="Black" Foreground="White" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="状态区" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="White" Opacity=".5" />
         </Grid>
     </Grid>
 </Window>

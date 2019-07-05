@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -43,6 +45,20 @@ namespace Netease.Live.InteropServices
             }
 
             return Encoding.UTF8.GetString(bytes.ToArray(), 0, bytes.Count);
+        }
+
+        public static Bitmap CreateBitmap(byte[] data, int width, int height, PixelFormat format, int pixelSize)
+        {
+            var result = new Bitmap(width, height, format);
+
+            var bmpData = result.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadWrite, format);
+
+            var scan = bmpData.Scan0;
+            Marshal.Copy(data, 0, scan, pixelSize);
+
+            result.UnlockBits(bmpData);
+
+            return result;
         }
     }
 }
