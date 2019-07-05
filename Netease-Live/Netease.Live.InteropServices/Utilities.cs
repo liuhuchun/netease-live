@@ -18,6 +18,7 @@ namespace Netease.Live.InteropServices
 
             var utf8Bytes = Encoding.UTF8.GetBytes(data);
             var ptr = Marshal.AllocCoTaskMem(utf8Bytes.Length + 1);
+
             Marshal.Copy(utf8Bytes, 0, ptr, utf8Bytes.Length);
             Marshal.WriteByte(ptr, utf8Bytes.Length, 0);
 
@@ -32,17 +33,15 @@ namespace Netease.Live.InteropServices
             }
 
             var bytes = new List<byte>();
-            for (var offset = 0; ; offset++)
-            {
-                var b = Marshal.ReadByte(pNativeData, offset);
 
-                if (b == 0)
-                {
-                    break;
-                }
+            var offset = 0;
+            var b = default(byte);
+            do
+            {
+                b = Marshal.ReadByte(pNativeData, offset++);
 
                 bytes.Add(b);
-            }
+            } while (b != 0);
 
             return Encoding.UTF8.GetString(bytes.ToArray(), 0, bytes.Count);
         }
